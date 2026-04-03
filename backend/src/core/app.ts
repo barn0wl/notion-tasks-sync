@@ -3,7 +3,7 @@ import { SyncState, SyncStateChanges, Task} from "../models/types.js"
 import { NotionData } from "../models/notionTypes.js";
 
 //Services
-import googleTasks from '../services/tasksService.js';
+import googleTasks from '../services/googleTasksService.js';
 import notion from "../services/notionService.js";
 
 //Helpers

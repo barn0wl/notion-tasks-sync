@@ -1,11 +1,25 @@
+# Dependencies
+node_modules/
 
-#dev environment specific ignores
+# Environment files (but keep a sample)
+.env
+.env.local
+.env.*.local
 
-/node_modules
+# Build outputs
 dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
 
 #sensitive info specific ignores
 
-/credentials.json
-/token.json
-/.env
+credentials.json
+token.json
