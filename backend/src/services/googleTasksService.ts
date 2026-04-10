@@ -193,6 +193,30 @@ class GoogleTasksService {
         console.log("Error deleting task. ID:", task.id, error)
       }
     }
+
+    /**
+     * Find a task by its ID across all task lists
+     */
+    async getTaskById(taskId: string): Promise<Task | null> {
+        try {
+            const taskLists = await this.getTaskLists();
+            if (!taskLists) return null;
+
+            for (const taskList of taskLists) {
+                const tasks = await this.getTasksFromList(taskList.id);
+                if (tasks) {
+                    const foundTask = tasks.find(task => task.id === taskId);
+                    if (foundTask) {
+                        return foundTask;
+                    }
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error("Error fetching task by ID:", taskId, error);
+            return null;
+        }
+    }
 }
 
 export default new GoogleTasksService();
