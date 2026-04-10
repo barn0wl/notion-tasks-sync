@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# Database
+data/
+*.db
+*.sqlite
+*.sqlite3
+
 # Environment files (but keep a sample)
 .env
 .env.local

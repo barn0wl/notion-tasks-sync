@@ -18,10 +18,13 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "googleapis": "^105.0.0",
-    "notion-tasks-app": "file:"
+    "notion-tasks-app": "file:",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/sqlite3": "^5.1.0",
     "typescript": "^5.5.4"
   }
 }
