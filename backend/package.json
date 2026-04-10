@@ -4,8 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "npx tsc",
-    "test": "node dist/index.js",
+    "build": "npx tsc -b --clean && tsc",
+    "dev": "node dist/index.js",
     "start": "node dist/index.js"
   },
   "author": "barn0wl",

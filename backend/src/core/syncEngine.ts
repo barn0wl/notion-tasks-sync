@@ -6,16 +6,16 @@ import { reconcileChanges } from './changeReconciler.js';
 import { applyChangesToState } from './stateApplier.js';
 
 // Import services (these already exist)
-import googleTasks from '../services/googleTasksService.js';
+import { googleTasksService } from '../services/google/googleTasksService.js';
 import notion from '../services/notionService.js';
 import notionHelpers from '../helpers/notionHelpers.js';
 
 export class SyncEngine {
-    private googleTasksService: typeof googleTasks;
+    private googleTasksService: typeof googleTasksService;
     private notionService: typeof notion;
 
     constructor() {
-        this.googleTasksService = googleTasks;
+        this.googleTasksService = googleTasksService;
         this.notionService = notion;
     }
 
@@ -44,13 +44,13 @@ export class SyncEngine {
      */
     async fetchGoogleTasksState(): Promise<SyncState | null> {
         try {
-            const googleService = await this.googleTasksService.create();
-            const myTaskLists = await googleService.getTaskLists();
+            
+            const myTaskLists = await this.googleTasksService.getTaskLists();
 
             const myTasks = [];
             if (myTaskLists) {
                 for (const taskList of myTaskLists) {
-                    const tasks = await googleService.getTasksFromList(taskList.id);
+                    const tasks = await this.googleTasksService.getTasksFromList(taskList.id);
                     if (tasks) {
                         for (const task of tasks) {
                             myTasks.push(task);
@@ -73,7 +73,6 @@ export class SyncEngine {
      * Push changes to Notion
      */
     async pushChangesToNotion(notionData: NotionData, changes: SyncStateChanges): Promise<void> {
-        const googleService = await this.googleTasksService.create();
 
         // Task Lists (Projects in Notion)
         for (const addedList of changes.taskLists.added) {
@@ -148,35 +147,34 @@ export class SyncEngine {
      * Push changes to Google Tasks
      */
     async pushChangesToGoogleTasks(changes: SyncStateChanges): Promise<void> {
-        const googleService = await this.googleTasksService.create();
 
         // Task Lists
         for (const addedList of changes.taskLists.added) {
-            await googleService.insertTaskList(addedList);
+            await this.googleTasksService.insertTaskList(addedList);
         }
 
         for (const updatedList of changes.taskLists.updated) {
-            await googleService.patchTaskList(updatedList);
+            await this.googleTasksService.patchTaskList(updatedList);
         }
 
         for (const deletedId of changes.taskLists.deleted) {
-            await googleService.deleteTaskList(deletedId);
+            await this.googleTasksService.deleteTaskList(deletedId);
         }
 
         // Tasks
         for (const addedTask of changes.tasks.added) {
-            await googleService.insertTask(addedTask);
+            await this.googleTasksService.insertTask(addedTask);
         }
 
         for (const updatedTask of changes.tasks.updated) {
-            await googleService.patchTask(updatedTask);
+            await this.googleTasksService.patchTask(updatedTask);
         }
 
         for (const deletedId of changes.tasks.deleted) {
             // Need to find the task to delete it properly
-            const task = await googleService.getTaskById?.(deletedId);
+            const task = await this.googleTasksService.getTaskById(deletedId);
             if (task) {
-                await googleService.deleteTask(task);
+                await this.googleTasksService.deleteTask(task);
             }
         }
     }
@@ -189,11 +187,7 @@ export class SyncEngine {
         try {
             console.log("Starting full sync cycle...");
 
-            // 1. Initialize Google service
-            await this.googleTasksService.create();
-            console.log("✓ Google Tasks service initialized");
-
-            // 2. Fetch states from both platforms
+            // 1. Fetch states from both platforms
             console.log("Fetching Notion state...");
             const notionStateResponse = await this.fetchNotionState();
             console.log("Fetching Google Tasks state...");
@@ -206,11 +200,11 @@ export class SyncEngine {
 
             const { notionData, notionState } = notionStateResponse;
 
-            // 3. Load current synced state from database
+            // 2. Load current synced state from database
             const currentSyncedState = await syncStateRepository.loadFullSyncState();
             console.log(`Loaded synced state: ${currentSyncedState.tasklists.length} lists, ${currentSyncedState.tasks.length} tasks`);
 
-            // 4. Compare states to find changes
+            // 3. Compare states to find changes
             const notionChanges = compareStates(currentSyncedState, notionState);
             const googleTaskChanges = compareStates(currentSyncedState, googleTaskState);
 
@@ -223,20 +217,20 @@ export class SyncEngine {
                 tasks: googleTaskChanges.tasks.added.length + googleTaskChanges.tasks.updated.length + googleTaskChanges.tasks.deleted.length
             });
 
-            // 5. Reconcile conflicts (Google wins by default)
+            // 4. Reconcile conflicts (Google wins by default)
             const finalChanges = reconcileChanges(notionChanges, googleTaskChanges);
 
-            // 6. Apply changes to in-memory synced state
+            // 5. Apply changes to in-memory synced state
             applyChangesToState(currentSyncedState, finalChanges);
 
-            // 7. Push changes to both platforms
+            // 6. Push changes to both platforms
             console.log("Pushing changes to Notion...");
             await this.pushChangesToNotion(notionData, finalChanges);
 
             console.log("Pushing changes to Google Tasks...");
             await this.pushChangesToGoogleTasks(finalChanges);
 
-            // 8. Save the new synced state to database
+            // 7. Save the new synced state to database
             await syncStateRepository.saveFullSyncState(currentSyncedState);
             await syncStateRepository.setLastSyncTime(new Date().toISOString());
 
