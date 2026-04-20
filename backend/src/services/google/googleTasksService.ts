@@ -17,6 +17,14 @@ class GoogleTasksService {
     }
 
     /**
+     * Ensure valid authentication before any API operation.
+     * Call this at the start of any method that makes Google API calls.
+     */
+    private async ensureValidAuth(): Promise<void> {
+        await googleAuth.ensureValidAuth();
+    }
+
+    /**
      * Check if user is authenticated
      */
     async isAuthenticated(): Promise<boolean> {
@@ -44,6 +52,7 @@ class GoogleTasksService {
      * Get all task lists
      */
     async getTaskLists(): Promise<TaskList[]> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -62,6 +71,7 @@ class GoogleTasksService {
      * Get all tasks from a specific list
      */
     async getTasksFromList(listId: string): Promise<Task[]> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -111,6 +121,7 @@ class GoogleTasksService {
      * Insert a new task list
      */
     async insertTaskList(list: TaskList): Promise<TaskList> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -130,6 +141,7 @@ class GoogleTasksService {
      * Insert a new task
      */
     async insertTask(task: Task): Promise<Task> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -150,6 +162,7 @@ class GoogleTasksService {
      * Update a task list
      */
     async patchTaskList(list: TaskList): Promise<TaskList> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -170,6 +183,7 @@ class GoogleTasksService {
      * Update a task
      */
     async patchTask(task: Task): Promise<Task> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -191,6 +205,7 @@ class GoogleTasksService {
      * Delete a task list
      */
     async deleteTaskList(listId: string): Promise<void> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -209,6 +224,7 @@ class GoogleTasksService {
      * Delete a task
      */
     async deleteTask(task: Task): Promise<void> {
+        await this.ensureValidAuth();
         const client = await this.ensureClient();
         const service = google.tasks({ version: 'v1', auth: client });
         
@@ -245,6 +261,7 @@ class GoogleTasksService {
      */
     async testConnection(): Promise<boolean> {
         try {
+            await this.ensureValidAuth();
             const client = await this.ensureClient();
             const service = google.tasks({ version: 'v1', auth: client });
             await service.tasklists.list({ maxResults: 1 });

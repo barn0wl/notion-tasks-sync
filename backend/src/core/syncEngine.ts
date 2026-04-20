@@ -20,6 +20,36 @@ export class SyncEngine {
     }
 
     /**
+     * Verify authentication before running sync
+     */
+    private async verifyAuth(): Promise<boolean> {
+        console.log("Verifying Google Tasks authentication...");
+        
+        const isAuthenticated = await this.googleTasksService.isAuthenticated();
+        
+        if (!isAuthenticated) {
+            const status = await this.googleTasksService.getAuthStatus();
+            console.error("Authentication required:", status.error);
+            
+            // Trigger re-auth flow
+            await this.googleTasksService.reauthenticate();
+            
+            console.log("Please run /sync again after authentication");
+            return false;
+        }
+        
+        // Test the connection
+        const isConnected = await this.googleTasksService.testConnection();
+        if (!isConnected) {
+            console.error("Connection test failed");
+            return false;
+        }
+        
+        console.log("Authentication verified successfully");
+        return true;
+    }
+
+    /**
      * Fetch current state from Notion
      */
     async fetchNotionState(): Promise<{ notionData: NotionData; notionState: SyncState } | null> {
@@ -186,6 +216,13 @@ export class SyncEngine {
     async runFullSync(): Promise<boolean> {
         try {
             console.log("Starting full sync cycle...");
+            
+            // === Verify auth first ===
+            const authValid = await this.verifyAuth();
+            if (!authValid) {
+                console.error("Cannot proceed: authentication failed");
+                return false;
+            }
 
             // 1. Fetch states from both platforms
             console.log("Fetching Notion state...");

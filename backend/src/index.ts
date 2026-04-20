@@ -3,6 +3,7 @@ import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { syncEngine } from './core/index.js';
 import { googleTasksService } from './services/google/googleTasksService.js';
+import { googleAuth } from './services/google/googleAuth.js';
 
 dotenv.config();
 const app = express();
@@ -74,4 +75,44 @@ app.get('/auth/test', async (_req, res) => {
 app.post('/auth/reauth', async (_req, res) => {
     await googleTasksService.reauthenticate();
     res.json({ message: 'Token deleted. Please run /sync to re-authenticate.' });
+});
+
+// Get auth URL for manual authentication
+app.get('/auth/url', async (_req, res) => {
+    try {
+        const url = await googleAuth.getAuthUrl();
+        res.json({ authUrl: url });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+// Callback endpoint for OAuth (if using web flow)
+app.get('/auth/callback', async (req, res) => {
+    const code = req.query.code as string;
+    if (!code) {
+        res.status(400).json({ error: 'No code provided' });
+        return;
+    }
+    
+    try {
+        await googleAuth.exchangeCodeForTokens(code);
+        res.json({ message: 'Authentication successful! You can now use /sync' });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+// Force refresh token (without deleting)
+app.post('/auth/refresh', async (_req, res) => {
+    try {
+        const success = await googleAuth.refreshToken();
+        if (success) {
+            res.json({ message: 'Token refreshed successfully' });
+        } else {
+            res.status(401).json({ message: 'Could not refresh token. Please re-authenticate at /auth/url' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
 });

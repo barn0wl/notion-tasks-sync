@@ -112,6 +112,39 @@ class GoogleAuthService {
     }
 
     /**
+     * Ensure valid authentication before any API call.
+     * This will refresh the token if possible, or throw an error requiring re-auth.
+     */
+    async ensureValidAuth(): Promise<boolean> {
+        // Check current status
+        const status = await this.checkAuthStatus();
+        
+        if (status.isAuthenticated && status.hasValidToken) {
+            console.log("Auth is valid");
+            return true;
+        }
+        
+        // Try to refresh if token is expired
+        if (status.tokenExpired || (status.hasValidToken === false && this.client)) {
+            console.log("Token appears expired, attempting to refresh...");
+            const refreshed = await this.refreshToken();
+            if (refreshed) {
+                console.log("Token refreshed successfully");
+                return true;
+            }
+        }
+        
+        // If we got here, we need re-authentication
+        console.log("Auth is invalid. User needs to re-authenticate.");
+        
+        // Generate auth URL for convenience
+        const authUrl = await this.getAuthUrl();
+        console.log(`Please visit this URL to re-authenticate:\n${authUrl}`);
+        
+        throw new Error(`Authentication required. Please visit: ${authUrl}`);
+    }
+
+    /**
      * Check authentication status without throwing errors
      */
     async checkAuthStatus(): Promise<AuthStatus> {
