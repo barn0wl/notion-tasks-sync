@@ -109,6 +109,14 @@ export class SyncStateRepository {
         }));
     }
 
+    async getPendingTasksCount(): Promise<number> {
+        const db = await this.getDb();
+        const result = await db.get<{ count: number }>(
+            `SELECT COUNT(*) as count FROM tasks WHERE status != 'completed'`
+        );
+        return result?.count ?? 0;
+    }
+
     async getTasksByListId(taskListId: string): Promise<Task[]> {
         const db = await this.getDb();
         const rows = await db.all<{
