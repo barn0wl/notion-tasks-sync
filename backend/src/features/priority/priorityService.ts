@@ -149,6 +149,21 @@ export class PriorityService {
         return map;
     }
 
+    async getTaskById(taskId: string): Promise<Task | null> {
+        const db = await this.getDb();
+        const row = await db.get<{
+            id: string; title: string; status: string;
+            due: string | null; completed: string | null;
+            taskListId: string; selfLink: string | null;
+        }>(`SELECT * FROM tasks WHERE id = ?`, [taskId]);
+        if (!row) return null;
+        return {
+            id: row.id, title: row.title, status: row.status,
+            due: row.due || undefined, completed: row.completed || undefined,
+            taskListId: row.taskListId, selfLink: row.selfLink || undefined
+        };
+    }
+
     /**
      * Calculate due date proximity score
      */
@@ -227,56 +242,43 @@ export class PriorityService {
         return this.config.defaultListWeight;
     }
 
+    private normalizeToPriority(totalScore: number): number {
+        if (totalScore <= -0.5) return 1;
+        if (totalScore <= 0.5)  return 2;
+        if (totalScore <= 1.5)  return 3;
+        if (totalScore <= 2.5)  return 4;
+        return 5;
+    }
+
+    private taskSortComparator(a: PrioritizedTask, b: PrioritizedTask): number {
+        if (a.priority !== b.priority) return b.priority - a.priority;
+        if (a.due && b.due) return new Date(a.due).getTime() - new Date(b.due).getTime();
+        if (a.due) return -1;
+        if (b.due) return 1;
+        return a.title.localeCompare(b.title);
+    }
+
     /**
      * Score a single task
      * @param task - The task to score
      * @param taskList - Optional task list context (if not provided, will fetch from DB)
      * @returns Priority score (1-5, where 5 is highest priority)
      */
-    async scoreTask(task: Task, taskList?: TaskList): Promise<PrioritizedTask> {
-        // Fetch task list if not provided
-        let list: TaskList | undefined = taskList;
-        if (!list) {
-            const fetchedList = await this.getTaskListById(task.taskListId);
-            if (fetchedList) {
-                list = fetchedList;
-            }
-        }
-        
-        // Calculate individual scores
+    scoreTask(task: Task, taskList?: TaskList): PrioritizedTask {
         const dueScore = this.calculateDueScore(task.due);
         const keywordScore = this.calculateKeywordScore(task.title);
-        const listScore = this.calculateListScore(list);
-        
-        // Total raw score (can be negative from list score)
-        let totalScore = dueScore + keywordScore + listScore;
-        
-        // Normalize to 1-5 scale
-        // Raw score range typically: -1 to 5
-        // Map to 1-5: -1->1, 0->2, 1->3, 2->4, 3-5->5
-        let priority: number;
-        if (totalScore <= -0.5) {
-            priority = 1;
-        } else if (totalScore <= 0.5) {
-            priority = 2;
-        } else if (totalScore <= 1.5) {
-            priority = 3;
-        } else if (totalScore <= 2.5) {
-            priority = 4;
-        } else {
-            priority = 5;
-        }
-        
-        return {
-            ...task,
-            priority,
-            priorityBreakdown: {
-                dueScore,
-                keywordScore,
-                listScore,
-                totalScore
-            }
-        };
+        const listScore = this.calculateListScore(taskList);
+        const totalScore = dueScore + keywordScore + listScore;
+        const priority = this.normalizeToPriority(totalScore);
+        return { ...task, priority, priorityBreakdown: { dueScore, keywordScore, listScore, totalScore } };
+    }
+
+    // Async version that fetches task list if needed
+    async scoreTaskById(taskId: string): Promise<PrioritizedTask | null> {
+        const task = await this.getTaskById(taskId);
+        if (!task) return null;
+        const taskList = await this.getTaskListById(task.taskListId);
+        return this.scoreTask(task, taskList ?? undefined);
     }
 
     /**
@@ -284,57 +286,31 @@ export class PriorityService {
      * @param taskListId - Optional filter by task list ID
      */
     async getPrioritizedTasks(taskListId?: string): Promise<PrioritizedTask[]> {
-        // Get all tasks (optionally filtered)
-        const tasks = await this.getAllTasks(taskListId);
-        
-        // Get all task lists for batch processing (avoids N+1 queries)
-        const taskLists = await this.getAllTaskLists();
-        
-        // Score each task
-        const prioritizedTasks: PrioritizedTask[] = [];
-        for (const task of tasks) {
-            const taskList = taskLists.get(task.taskListId);
-            const prioritizedTask = await this.scoreTask(task, taskList);
-            prioritizedTasks.push(prioritizedTask);
-        }
-        
-        // Sort by priority (highest first), then by due date (earliest first), then by title
-        prioritizedTasks.sort((a, b) => {
-            if (a.priority !== b.priority) {
-                return b.priority - a.priority;
-            }
-            
-            // If same priority, sort by due date
-            if (a.due && b.due) {
-                return new Date(a.due).getTime() - new Date(b.due).getTime();
-            }
-            if (a.due) return -1;
-            if (b.due) return 1;
-            
-            // Finally by title
-            return a.title.localeCompare(b.title);
-        });
-        
-        return prioritizedTasks;
+        const [tasks, taskLists] = await Promise.all([
+            this.getAllTasks(taskListId),
+            this.getAllTaskLists()
+        ]);
+        return tasks
+            .map(task => this.scoreTask(task, taskLists.get(task.taskListId)))
+            .sort(this.taskSortComparator);
+    }
+
+    async getPrioritizedTaskById(taskId: string): Promise<PrioritizedTask | null> {
+        const task = await this.getTaskById(taskId);
+        if (!task) return null;
+        const taskList = await this.getTaskListById(task.taskListId);
+        return this.scoreTask(task, taskList ?? undefined);
     }
 
     /**
      * Update priority configuration at runtime
      */
-    updateConfig(config: Partial<PriorityConfig>): void {
-        if (config.overdueWeight !== undefined) this.config.overdueWeight = config.overdueWeight;
-        if (config.dueTodayWeight !== undefined) this.config.dueTodayWeight = config.dueTodayWeight;
-        if (config.dueWithin3DaysWeight !== undefined) this.config.dueWithin3DaysWeight = config.dueWithin3DaysWeight;
-        if (config.highPriorityKeywords !== undefined) this.config.highPriorityKeywords = config.highPriorityKeywords;
-        if (config.highPriorityWeight !== undefined) this.config.highPriorityWeight = config.highPriorityWeight;
-        if (config.mediumPriorityKeywords !== undefined) this.config.mediumPriorityKeywords = config.mediumPriorityKeywords;
-        if (config.mediumPriorityWeight !== undefined) this.config.mediumPriorityWeight = config.mediumPriorityWeight;
-        if (config.defaultListWeight !== undefined) this.config.defaultListWeight = config.defaultListWeight;
-        if (config.taskListWeights !== undefined) {
-            this.config.taskListWeights = new Map(config.taskListWeights);
+    updateConfig(config: Partial<Omit<PriorityConfig, 'taskListWeights'>> & { taskListWeights?: Record<string, number> }): void {
+        const { taskListWeights, ...rest } = config;
+        Object.assign(this.config, rest);
+        if (taskListWeights) {
+            this.config.taskListWeights = new Map(Object.entries(taskListWeights));
         }
-        
-        console.log('Priority configuration updated');
     }
 
     /**

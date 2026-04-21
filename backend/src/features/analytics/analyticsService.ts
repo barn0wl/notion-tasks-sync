@@ -51,35 +51,35 @@ export class AnalyticsService {
      */
     async getCompletionRate(days?: number): Promise<number> {
         const db = await this.getDb();
-        
+
         if (days) {
-            // Completion rate for tasks completed within the last N days
-            const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - days);
-            const cutoffStr = cutoffDate.toISOString().split('T')[0];
-            
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            const cutoffStr = cutoff.toISOString().split('T')[0];
+
+            // Tasks completed in the window / tasks that were due or completed in the window
             const result = await db.get<{ completed: number; total: number }>(`
-                SELECT 
-                    COUNT(CASE WHEN status = 'completed' AND completed >= ? THEN 1 END) as completed,
-                    COUNT(*) as total
+                SELECT
+                    COUNT(CASE WHEN status = 'completed' AND DATE(completed) >= ? THEN 1 END) as completed,
+                    COUNT(CASE WHEN
+                        (status = 'completed' AND DATE(completed) >= ?)
+                        OR (status != 'completed' AND due IS NOT NULL AND due >= ?)
+                    THEN 1 END) as total
                 FROM tasks
-                WHERE status = 'completed' OR (status = 'needsAction' AND due IS NOT NULL)
-            `, [cutoffStr]);
-            
-            if (!result || result.total === 0) return 0;
-            return result.completed / result.total;
-        } else {
-            // Overall completion rate
-            const result = await db.get<{ completed: number; total: number }>(`
-                SELECT 
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
-                    COUNT(*) as total
-                FROM tasks
-            `);
-            
+            `, [cutoffStr, cutoffStr, cutoffStr]);
+
             if (!result || result.total === 0) return 0;
             return result.completed / result.total;
         }
+
+        const result = await db.get<{ completed: number; total: number }>(`
+            SELECT
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+                COUNT(*) as total
+            FROM tasks
+        `);
+        if (!result || result.total === 0) return 0;
+        return result.completed / result.total;
     }
 
     /**
