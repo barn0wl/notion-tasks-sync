@@ -14,7 +14,6 @@ export interface TaskList {
     selfLink?: string
 }
 
-
 export interface SyncState {
     tasklists: TaskList[]
     tasks: Task[]
@@ -31,4 +30,14 @@ export interface SyncStateChanges {
       deleted: string[]
       updated: TaskList[]
     };
-  }
+}
+
+export interface PrioritizedTask extends Task {
+    priority: number;  // 1-5 scale, where 5 is highest priority
+    priorityBreakdown: {
+        dueScore: number;
+        keywordScore: number;
+        listScore: number;
+        totalScore: number;
+    };
+}

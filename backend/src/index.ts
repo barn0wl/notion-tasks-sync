@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import { syncEngine } from './core/index.js';
 import { googleTasksService } from './services/google/googleTasksService.js';
 import { googleAuth } from './services/google/googleAuth.js';
+import { analyticsRouter } from './controllers/analyticsController.js';
+import { priorityRouter } from './controllers/priorityController.js';
 
 dotenv.config();
 const app = express();
@@ -12,14 +14,17 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
 
 // Health check
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Analytics routes
+app.use('/analytics', analyticsRouter);
+
+// Priority routes
+app.use('/tasks', priorityRouter);
 
 // Run full sync
 app.get('/sync', async (_req, res) => {
@@ -94,7 +99,6 @@ app.get('/auth/callback', async (req, res) => {
         res.status(400).json({ error: 'No code provided' });
         return;
     }
-    
     try {
         await googleAuth.exchangeCodeForTokens(code);
         res.json({ message: 'Authentication successful! You can now use /sync' });
@@ -115,4 +119,8 @@ app.post('/auth/refresh', async (_req, res) => {
     } catch (error) {
         res.status(500).json({ error: String(error) });
     }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
 });
